@@ -1,0 +1,97 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.widgets import Slider, Button
+
+# Constants
+g = 9.81
+
+def calculate_trajectory(v0, angle):
+    angle_rad = np.radians(angle)
+    vx = v0 * np.cos(angle_rad)
+    vy = v0 * np.sin(angle_rad)
+    t = np.linspace(0, 2 * vy / g, 500)
+    x = vx * t
+    y = vy * t - 0.5 * g * t**2
+    return x, y
+
+# Figure setup
+fig, ax = plt.subplots(figsize=(9, 6))
+plt.subplots_adjust(bottom=0.30)
+ax.set_xlim(0, 1100)
+ax.set_ylim(0, 550)
+ax.set_facecolor('black')
+fig.patch.set_facecolor('black')
+ax.set_xlabel('Distance (m)', color='white')
+ax.set_ylabel('Height (m)', color='white')
+ax.set_title('Projectile Motion', color='white')
+ax.tick_params(colors='white')
+for spine in ax.spines.values():
+    spine.set_edgecolor('gray')
+
+# Plot elements
+x, y = calculate_trajectory(20, 45)
+trail, = ax.plot([], [], color='cyan', lw=1, alpha=0.3)
+ball, = ax.plot([], [], 'o', color='white', markersize=8)
+dot_trail, = ax.plot([], [], '--', color='yellow', lw=1, alpha=0.6)
+time_text = ax.text(0.02, 0.92, '', transform=ax.transAxes, color='white', fontsize=10)
+
+# Animation state
+frame = [0]
+running = [False]
+
+def animate(i):
+    if not running[0]:
+        return ball, dot_trail, time_text
+    if frame[0] < len(x):
+        ball.set_data([x[frame[0]]], [y[frame[0]]])
+        dot_trail.set_data(x[:frame[0]], y[:frame[0]])
+        t_now = round(frame[0] * (2 * slider_v0.val * np.sin(np.radians(slider_angle.val)) / g) / 500, 2)
+        time_text.set_text(f'Time: {t_now} s')
+        frame[0] += 3
+    else:
+        running[0] = False
+    return ball, dot_trail, time_text
+
+ani = animation.FuncAnimation(fig, animate, interval=20, blit=True)
+
+# Sliders
+ax_v0    = fig.add_axes([0.15, 0.18, 0.70, 0.03])
+ax_angle = fig.add_axes([0.15, 0.11, 0.70, 0.03])
+slider_v0    = Slider(ax_v0,    'Speed (m/s)', 5, 100, valinit=20, color='deepskyblue')
+slider_angle = Slider(ax_angle, 'Angle (deg)', 1,  89, valinit=45, color='magenta')
+
+for sl in [slider_v0, slider_angle]:
+    sl.label.set_color('white')
+    sl.valtext.set_color('white')
+
+def update(val):
+    global x, y
+    x, y = calculate_trajectory(slider_v0.val, slider_angle.val)
+    trail.set_data([], [])
+    ball.set_data([], [])
+    dot_trail.set_data([], [])
+    time_text.set_text('')
+    frame[0] = 0
+    running[0] = False
+    fig.canvas.draw_idle()
+
+slider_v0.on_changed(update)
+slider_angle.on_changed(update)
+
+# Launch button
+ax_button = fig.add_axes([0.43, 0.03, 0.15, 0.05])
+button = Button(ax_button, 'Launch', color='red', hovercolor='darkred')
+button.label.set_color('white')
+
+def launch(event):
+    global x, y
+    x, y = calculate_trajectory(slider_v0.val, slider_angle.val)
+    trail.set_data(x, y)
+    dot_trail.set_data([], [])
+    frame[0] = 0
+    running[0] = True
+
+button.on_clicked(launch)
+
+plt.show()
