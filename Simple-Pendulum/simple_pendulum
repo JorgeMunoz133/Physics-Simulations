@@ -1,0 +1,141 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.widgets import Slider, Button
+
+# settings
+gravity = 9.81
+dt = 0.02  # time step
+
+# pendulum starting values
+length = 2.0
+bob_position = 1.0  # how far along the rod the bob is (0 to 1)
+angle = 0.8         # starting angle in radians
+speed = 0.0         # starting angular velocity
+
+# time counter
+t = 0.0
+
+# trail storage
+trail_x = []
+trail_y = []
+
+# is the user dragging the bob?
+dragging = False
+
+# ---- setup the plot ----
+fig, ax = plt.subplots()
+plt.subplots_adjust(bottom=0.3)
+
+ax.set_xlim(-3.5, 3.5)
+ax.set_ylim(-3.5, 0.5)
+ax.set_aspect('equal')
+ax.set_title('Pendulum - click and drag to move it!')
+
+# drawing objects
+rod,      = ax.plot([], [], 'k-', linewidth=2)
+bob,      = ax.plot([], [], 'ro', markersize=15)
+trail,    = ax.plot([], [], 'b-', linewidth=1, alpha=0.5)
+pivot,    = ax.plot([0], [0], 'ks', markersize=8)
+time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=11)
+
+# ---- sliders ----
+ax_length = plt.axes([0.2, 0.18, 0.6, 0.03])
+slider_length = Slider(ax_length, 'Length', 0.5, 3.0, valinit=length)
+
+ax_bob = plt.axes([0.2, 0.12, 0.6, 0.03])
+slider_bob = Slider(ax_bob, 'Bob position', 0.1, 1.0, valinit=bob_position)
+
+# ---- reset button ----
+ax_button = plt.axes([0.4, 0.03, 0.2, 0.06])
+reset_button = Button(ax_button, 'Reset')
+
+def reset(event):
+    global angle, speed, t, trail_x, trail_y
+    angle = 0.8
+    speed = 0.0
+    t = 0.0
+    trail_x = []
+    trail_y = []
+
+reset_button.on_clicked(reset)
+
+# ---- update axis limits when length slider changes ----
+def update_limits(val):
+    L = slider_length.val
+    ax.set_xlim(-L - 0.5, L + 0.5)
+    ax.set_ylim(-L - 0.5, 0.5)
+
+slider_length.on_changed(update_limits)
+
+# ---- mouse dragging ----
+def on_press(event):
+    global dragging
+    if event.inaxes == ax:
+        dragging = True
+
+def on_release(event):
+    global dragging, speed
+    dragging = False
+    speed = 0.0  # let go from rest
+
+def on_move(event):
+    global angle, trail_x, trail_y
+    if dragging and event.inaxes == ax:
+        # calculate angle from mouse position relative to pivot (0, 0)
+        mouse_x = event.xdata
+        mouse_y = event.ydata
+        # atan2 to get angle, pivot is at top so we flip y
+        angle = np.arctan2(mouse_x, -mouse_y)
+        # clear trail when dragging
+        trail_x = []
+        trail_y = []
+
+fig.canvas.mpl_connect('button_press_event', on_press)
+fig.canvas.mpl_connect('button_release_event', on_release)
+fig.canvas.mpl_connect('motion_notify_event', on_move)
+
+# ---- physics + animation ----
+def animate(frame):
+    global angle, speed, t
+
+    if not dragging:
+        # pendulum physics (Euler method)
+        L_eff = slider_length.val * slider_bob.val
+        if L_eff < 0.05:
+            L_eff = 0.05
+
+        acceleration = -(gravity / L_eff) * np.sin(angle)
+        speed = speed + acceleration * dt
+        angle = angle + speed * dt
+        t = t + dt
+
+    # calculate bob position
+    L = slider_length.val
+    frac = slider_bob.val
+
+    bob_x = L * frac * np.sin(angle)
+    bob_y = -L * frac * np.cos(angle)
+
+    tip_x = L * np.sin(angle)
+    tip_y = -L * np.cos(angle)
+
+    # update trail
+    if not dragging:
+        trail_x.append(bob_x)
+        trail_y.append(bob_y)
+        if len(trail_x) > 300:
+            trail_x.pop(0)
+            trail_y.pop(0)
+
+    # update the drawings
+    rod.set_data([0, tip_x], [0, tip_y])
+    bob.set_data([bob_x], [bob_y])
+    trail.set_data(trail_x, trail_y)
+    time_text.set_text(f'Time: {t:.1f} s')
+
+    return rod, bob, trail, time_text
+
+ani = animation.FuncAnimation(fig, animate, interval=20, blit=True)
+
+plt.show()
